@@ -1,89 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Approval Status Dashboard</title>
-
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
-
-  <!-- KEEP ALL YOUR CSS EXACTLY AS YOU HAVE IT -->
-  <style>
-    /* (UNCHANGED — your full CSS stays here exactly as-is) */
-  </style>
-</head>
-
-<body>
-
-<header class="topbar">
-  <div class="topbar-left">
-    <h1>Approval Dashboard</h1>
-  </div>
-  <div class="ts">Updated <span id="ts">—</span></div>
-</header>
-
-<nav class="tab-nav">
-  <button class="tab-btn active" onclick="switchTab('board')">Board</button>
-  <button class="tab-btn" onclick="switchTab('entry')">New Entry</button>
-</nav>
-
-<!-- ENTRY -->
-<div class="panel" id="panel-entry">
-  <div class="entry-wrap">
-    <h2>Submit Invoice</h2>
-
-    <input id="f-name" placeholder="Invoice Name" />
-    <input id="f-num" placeholder="Invoice Number" />
-    <input id="f-amt" type="number" placeholder="Amount" />
-
-    <button onclick="submitEntry()">Post Invoice</button>
-  </div>
-</div>
-
-<!-- BOARD -->
-<div class="panel active" id="panel-board">
-  <div class="board-wrap">
-
-    <div class="summary">
-      <div>Pending: <span id="cnt-pending">0</span></div>
-      <div>Approved: <span id="cnt-approved">0</span></div>
-      <div>Rejected: <span id="cnt-rejected">0</span></div>
-      <div>Total: <span id="sum-total">0</span></div>
-    </div>
-
-    <div class="board">
-
-      <div class="column">
-        <h3>Pending</h3>
-        <div id="cards-pending"></div>
-      </div>
-
-      <div class="column">
-        <h3>Approved</h3>
-        <div id="cards-approved"></div>
-      </div>
-
-      <div class="column">
-        <h3>Rejected</h3>
-        <div id="cards-rejected"></div>
-      </div>
-
-    </div>
-  </div>
-</div>
-
 <script>
 const SUPABASE_URL = "https://pbjdlqekdjwwzzqsqwur.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBiamRscWVrZGp3d3p6cXNxd3VyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNTA5ODMsImV4cCI6MjA5NDcyNjk4M30.xIkzz3F7D0KxhrcpQ9-Yi3LI6UY0H7GAZ9QKIRLE-zg";
+const SUPABASE_KEY = "PASTE_YOUR_ANON_KEY_HERE";
 
+/* =========================
+   TAB SWITCH
+========================= */
 function switchTab(tab) {
-  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-  document.getElementById("panel-" + tab).classList.add("active");
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+
+  document.getElementById('panel-' + tab).classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
 }
 
-/* =======================
-   LOAD DATA FROM SUPABASE
-======================= */
+/* =========================
+   LOAD FROM SUPABASE
+========================= */
 async function loadInvoices() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/invoices?select=*`, {
     headers: {
@@ -96,92 +28,150 @@ async function loadInvoices() {
   render(data);
 }
 
-/* =======================
-   RENDER UI
-======================= */
+/* =========================
+   MAIN RENDER ENGINE
+========================= */
 function render(invoices) {
-  const groups = { pending: [], approved: [], rejected: [] };
+  const groups = {
+    pending: [],
+    approved: [],
+    rejected: []
+  };
 
   invoices.forEach(inv => {
-    if (!groups[inv.status]) groups[inv.status] = [];
-    groups[inv.status].push(inv);
+    const s = inv.status || "pending";
+    if (!groups[s]) groups[s] = [];
+    groups[s].push(inv);
   });
 
   renderColumn("pending", groups.pending);
   renderColumn("approved", groups.approved);
   renderColumn("rejected", groups.rejected);
 
-  document.getElementById("cnt-pending").textContent = groups.pending.length;
-  document.getElementById("cnt-approved").textContent = groups.approved.length;
-  document.getElementById("cnt-rejected").textContent = groups.rejected.length;
-  document.getElementById("sum-total").textContent = invoices.length;
+  // COUNTERS
+  document.getElementById('cnt-pending').textContent = groups.pending.length;
+  document.getElementById('cnt-approved').textContent = groups.approved.length;
+  document.getElementById('cnt-rejected').textContent = groups.rejected.length;
+  document.getElementById('sum-total').textContent =
+    invoices.length;
 
-  document.getElementById("ts").textContent =
-    new Date().toLocaleTimeString();
+  document.getElementById('pending-notif').textContent =
+    groups.pending.length;
+
+  document.getElementById('ts').textContent =
+    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-/* =======================
-   RENDER COLUMN
-======================= */
+/* =========================
+   RENDER EACH COLUMN
+========================= */
 function renderColumn(status, items) {
-  const el = document.getElementById("cards-" + status);
+  const el = document.getElementById('cards-' + status);
 
-  if (!items.length) {
-    el.innerHTML = "<p style='opacity:0.5'>Empty</p>";
+  if (!items || items.length === 0) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <div>No invoices</div>
+      </div>
+    `;
     return;
   }
 
-  el.innerHTML = items.map(inv => `
-    <div style="border:1px solid #333; padding:10px; margin:5px;">
-      <b>${inv.name}</b><br/>
-      ${inv.num}<br/>
-      €${inv.amount}<br/>
+  el.innerHTML = items.map(inv => {
+    const badge = status;
 
-      <button onclick="updateStatus(${inv.id}, 'approved')">Approve</button>
-      <button onclick="updateStatus(${inv.id}, 'rejected')">Reject</button>
-      <button onclick="updateStatus(${inv.id}, 'pending')">Move</button>
-    </div>
-  `).join("");
+    return `
+      <div class="card">
+
+        <div class="card-top">
+          <div>
+            <div class="inv-name">${inv.name || "Untitled"}</div>
+            <div class="inv-num">${inv.num || ""}</div>
+          </div>
+
+          <span class="badge badge-${badge}">
+            ${badge.toUpperCase()}
+          </span>
+        </div>
+
+        <div class="card-div"></div>
+
+        <div class="card-meta">
+          <div class="req">
+            <div class="av">${(inv.name || "X")[0]}</div>
+            <span class="req-name">User</span>
+          </div>
+
+          <span class="amt">€${inv.amount || 0}</span>
+        </div>
+
+        <div class="card-actions">
+          ${status !== 'approved' ? `
+            <button class="action-btn btn-approve"
+              onclick="updateStatus(${inv.id}, 'approved')">
+              Approve
+            </button>` : ''}
+
+          ${status !== 'rejected' ? `
+            <button class="action-btn btn-reject"
+              onclick="updateStatus(${inv.id}, 'rejected')">
+              Reject
+            </button>` : ''}
+
+          ${status !== 'pending' ? `
+            <button class="action-btn btn-undo"
+              onclick="updateStatus(${inv.id}, 'pending')">
+              Move
+            </button>` : ''}
+        </div>
+
+      </div>
+    `;
+  }).join('');
 }
 
-/* =======================
-   ADD INVOICE (REAL)
-======================= */
+/* =========================
+   CREATE INVOICE (SUPABASE)
+========================= */
 async function submitEntry() {
-  const name = document.getElementById("f-name").value;
-  const num = document.getElementById("f-num").value;
-  const amount = document.getElementById("f-amt").value;
+  const name = document.getElementById('f-name').value;
+  const num = document.getElementById('f-num').value;
+  const amt = document.getElementById('f-amt').value;
 
-  if (!name || !num || !amount) return;
+  if (!name || !num || !amt) return;
 
   await fetch(`${SUPABASE_URL}/rest/v1/invoices`, {
-    method: "POST",
+    method: 'POST',
     headers: {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json"
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       name,
       num,
-      amount: parseFloat(amount),
-      status: "pending"
+      amount: parseFloat(amt),
+      status: 'pending'
     })
   });
+
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-num').value = '';
+  document.getElementById('f-amt').value = '';
 
   loadInvoices();
 }
 
-/* =======================
-   UPDATE STATUS (REAL)
-======================= */
+/* =========================
+   UPDATE STATUS (SUPABASE)
+========================= */
 async function updateStatus(id, status) {
   await fetch(`${SUPABASE_URL}/rest/v1/invoices?id=eq.${id}`, {
-    method: "PATCH",
+    method: 'PATCH',
     headers: {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json"
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({ status })
   });
@@ -189,8 +179,8 @@ async function updateStatus(id, status) {
   loadInvoices();
 }
 
+/* =========================
+   INIT
+========================= */
 loadInvoices();
 </script>
-
-</body>
-</html>
