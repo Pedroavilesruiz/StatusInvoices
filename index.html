@@ -1,21 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Approval Status Dashboard</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    /* YOUR ORIGINAL CSS — KEEPING IT EXACTLY AS YOU HAD IT */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0c0c0e;
+      --surface: #141416;
+      --border: #262630;
+      --text-primary: #eeeef5;
+      --text-secondary:#8080a0;
+      --accent: #c8f04d;
+      --pending-c: #f5a623;
+      --approved-c: #4dffa0;
+      --rejected-c: #ff5c7a;
+      --r: 10px;
+    }
+
+    body { font-family: 'Syne', sans-serif; background: var(--bg); color: var(--text-primary); }
+
+    .topbar { padding: 1rem; display:flex; justify-content:space-between; }
+
+    .board { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; padding:1rem; }
+
+    .column { background: var(--surface); padding:1rem; border-radius:var(--r); }
+
+    .card { background:#111; padding:10px; margin:10px 0; border-radius:6px; }
+
+    .badge { font-size:10px; padding:3px 6px; border-radius:4px; }
+
+    .badge-pending { color: var(--pending-c); }
+    .badge-approved { color: var(--approved-c); }
+    .badge-rejected { color: var(--rejected-c); }
+
+    button { margin:3px; padding:5px 8px; cursor:pointer; }
+
+    .panel { display:none; }
+    .panel.active { display:block; }
+  </style>
+</head>
+
+<body>
+
+<header class="topbar">
+  <h1>Approval Dashboard</h1>
+  <div id="ts">—</div>
+</header>
+
+<nav>
+  <button onclick="switchTab('board')">Board</button>
+  <button onclick="switchTab('entry')">New Entry</button>
+</nav>
+
+<!-- ENTRY -->
+<div class="panel" id="panel-entry">
+  <h2>Create Invoice</h2>
+
+  <input id="f-name" placeholder="Name" />
+  <input id="f-num" placeholder="Number" />
+  <input id="f-amt" type="number" placeholder="Amount" />
+
+  <button onclick="submitEntry()">Add</button>
+</div>
+
+<!-- BOARD -->
+<div class="panel active" id="panel-board">
+
+  <div class="board">
+
+    <div class="column">
+      <h3>Pending</h3>
+      <div id="cards-pending"></div>
+    </div>
+
+    <div class="column">
+      <h3>Approved</h3>
+      <div id="cards-approved"></div>
+    </div>
+
+    <div class="column">
+      <h3>Rejected</h3>
+      <div id="cards-rejected"></div>
+    </div>
+
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL = "https://pbjdlqekdjwwzzqsqwur.supabase.co";
 const SUPABASE_KEY = "PASTE_YOUR_ANON_KEY_HERE";
 
-/* =========================
+let invoices = [];
+
+/* =====================
    TAB SWITCH
-========================= */
+===================== */
 function switchTab(tab) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-
   document.getElementById('panel-' + tab).classList.add('active');
-  document.getElementById('tab-' + tab).classList.add('active');
 }
 
-/* =========================
-   LOAD FROM SUPABASE
-========================= */
+/* =====================
+   LOAD DATA
+===================== */
 async function loadInvoices() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/invoices?select=*`, {
     headers: {
@@ -24,154 +118,46 @@ async function loadInvoices() {
     }
   });
 
-  const data = await res.json();
-  render(data);
+  invoices = await res.json();
+  render();
 }
 
-/* =========================
-   MAIN RENDER ENGINE
-========================= */
-function render(invoices) {
-  const groups = {
-    pending: [],
-    approved: [],
-    rejected: []
-  };
-
-  invoices.forEach(inv => {
-    const s = inv.status || "pending";
-    if (!groups[s]) groups[s] = [];
-    groups[s].push(inv);
-  });
-
-  renderColumn("pending", groups.pending);
-  renderColumn("approved", groups.approved);
-  renderColumn("rejected", groups.rejected);
-
-  // COUNTERS
-  document.getElementById('cnt-pending').textContent = groups.pending.length;
-  document.getElementById('cnt-approved').textContent = groups.approved.length;
-  document.getElementById('cnt-rejected').textContent = groups.rejected.length;
-  document.getElementById('sum-total').textContent =
-    invoices.length;
-
-  document.getElementById('pending-notif').textContent =
-    groups.pending.length;
-
-  document.getElementById('ts').textContent =
-    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-/* =========================
-   RENDER EACH COLUMN
-========================= */
-function renderColumn(status, items) {
-  const el = document.getElementById('cards-' + status);
-
-  if (!items || items.length === 0) {
-    el.innerHTML = `
-      <div class="empty-state">
-        <div>No invoices</div>
-      </div>
-    `;
-    return;
-  }
-
-  el.innerHTML = items.map(inv => {
-    const badge = status;
-
-    return `
-      <div class="card">
-
-        <div class="card-top">
-          <div>
-            <div class="inv-name">${inv.name || "Untitled"}</div>
-            <div class="inv-num">${inv.num || ""}</div>
-          </div>
-
-          <span class="badge badge-${badge}">
-            ${badge.toUpperCase()}
-          </span>
-        </div>
-
-        <div class="card-div"></div>
-
-        <div class="card-meta">
-          <div class="req">
-            <div class="av">${(inv.name || "X")[0]}</div>
-            <span class="req-name">User</span>
-          </div>
-
-          <span class="amt">€${inv.amount || 0}</span>
-        </div>
-
-        <div class="card-actions">
-          ${status !== 'approved' ? `
-            <button class="action-btn btn-approve"
-              onclick="updateStatus(${inv.id}, 'approved')">
-              Approve
-            </button>` : ''}
-
-          ${status !== 'rejected' ? `
-            <button class="action-btn btn-reject"
-              onclick="updateStatus(${inv.id}, 'rejected')">
-              Reject
-            </button>` : ''}
-
-          ${status !== 'pending' ? `
-            <button class="action-btn btn-undo"
-              onclick="updateStatus(${inv.id}, 'pending')">
-              Move
-            </button>` : ''}
-        </div>
-
-      </div>
-    `;
-  }).join('');
-}
-
-/* =========================
-   CREATE INVOICE (SUPABASE)
-========================= */
+/* =====================
+   ADD INVOICE
+===================== */
 async function submitEntry() {
   const name = document.getElementById('f-name').value;
   const num = document.getElementById('f-num').value;
   const amt = document.getElementById('f-amt').value;
 
-  if (!name || !num || !amt) return;
-
   await fetch(`${SUPABASE_URL}/rest/v1/invoices`, {
-    method: 'POST',
+    method: "POST",
     headers: {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json'
+      "Content-Type": "application/json"
     },
     body: JSON.stringify({
       name,
       num,
       amount: parseFloat(amt),
-      status: 'pending'
+      status: "pending"
     })
   });
-
-  document.getElementById('f-name').value = '';
-  document.getElementById('f-num').value = '';
-  document.getElementById('f-amt').value = '';
 
   loadInvoices();
 }
 
-/* =========================
-   UPDATE STATUS (SUPABASE)
-========================= */
+/* =====================
+   UPDATE STATUS
+===================== */
 async function updateStatus(id, status) {
   await fetch(`${SUPABASE_URL}/rest/v1/invoices?id=eq.${id}`, {
-    method: 'PATCH',
+    method: "PATCH",
     headers: {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json'
+      "Content-Type": "application/json"
     },
     body: JSON.stringify({ status })
   });
@@ -179,8 +165,54 @@ async function updateStatus(id, status) {
   loadInvoices();
 }
 
-/* =========================
+/* =====================
+   RENDER UI
+===================== */
+function render() {
+  const groups = { pending: [], approved: [], rejected: [] };
+
+  invoices.forEach(inv => {
+    const s = inv.status || "pending";
+    groups[s].push(inv);
+  });
+
+  renderCol("pending", groups.pending);
+  renderCol("approved", groups.approved);
+  renderCol("rejected", groups.rejected);
+
+  document.getElementById('ts').textContent =
+    new Date().toLocaleTimeString();
+}
+
+/* =====================
+   COLUMN RENDER
+===================== */
+function renderCol(status, items) {
+  const el = document.getElementById("cards-" + status);
+  el.innerHTML = "";
+
+  items.forEach(inv => {
+    el.innerHTML += `
+      <div class="card">
+        <b>${inv.name}</b><br/>
+        ${inv.num}<br/>
+        €${inv.amount}<br/>
+
+        <span class="badge badge-${status}">${status}</span><br/>
+
+        <button onclick="updateStatus(${inv.id}, 'approved')">Approve</button>
+        <button onclick="updateStatus(${inv.id}, 'rejected')">Reject</button>
+        <button onclick="updateStatus(${inv.id}, 'pending')">Move</button>
+      </div>
+    `;
+  });
+}
+
+/* =====================
    INIT
-========================= */
+===================== */
 loadInvoices();
 </script>
+
+</body>
+</html>
